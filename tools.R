@@ -82,7 +82,21 @@ fusion.indexes.mod<-function(N, nfus=round(0.3*N), B=1) {
 }
 
 
+#' Function to simulate random cell fusions
+#'
+#' @param dist 
+#' @param fnum 
+#' @param weights 
+#'
+#' @return
+#' @export
+#'
+#' @examples
+#' 
 simulate.random<-function(dist, fnum, weights=rep(1, length(dist))) {
+  require(tibble)
+  require(dplyr)
+  out_df<-tibble(Nuclei=integer(), n=integer(), fusNum=integer())
   smax<-length(dist)
   for (i in 1:fnum) {
     c1<-sample(smax, 1, prob=weights*dist)
@@ -91,17 +105,43 @@ simulate.random<-function(dist, fnum, weights=rep(1, length(dist))) {
     dist[c2]<-dist[c2]-1
     dist[c1+c2]<-dist[c1+c2]+1
   }
-  return(dist)
+  tmp_df<-tibble(Nuclei=1:(fnum+1), n=dist, fusNum=rep(fnum, fnum+1)) %>% 
+    filter(!(Nuclei>1 & n<1))
+  tmp_df$n[1]<-0
+  out_df<-bind_rows(out_df,tmp_df)
+  return(out_df)
 }
 
+#' Function to simulate "founder" fusion model
+#'
+#' @param dist 
+#' @param fnum 
+#' @param weights 
+#'
+#' @return
+#' @export
+#'
+#' @examples
+#' 
 simulate.founder<-function(dist, fnum, weights=rep(1, length(dist))) {
+  require(tibble)
+  require(dplyr)
+  out_df<-tibble(Nuclei=integer(), n=integer(), fusNum=integer())
   smax<-length(dist)
   for (i in 1:fnum) {
     c1<-sample(smax, 1, prob=dist*weights)
     dist[c1]<-dist[c1]-1
     dist[c1+1]<-dist[c1+1]+1
   }
-  return(dist)
+  tmp_df<-tibble(Nuclei=1:(fnum+1), n=dist, fusNum=rep(fnum, fnum+1)) %>% 
+    filter(!(Nuclei>1 & n<1))
+  tmp_df$n[1]<-0
+  out_df<-bind_rows(out_df,tmp_df)
+  return(out_df)
+}
+
+dist.to.cdf<-function(dist) {
+  cumsum(dist)/sum(dist)
 }
 
 
