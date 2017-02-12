@@ -1,0 +1,62 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+```{r}
+  setwd("..")  
+  source("./Scripts/tools.R")
+  require(ggplot2)
+  require(dplyr)
+  fname="./MacrophagePaper/CDF/anti Syn1 on human monocyte.xlsx"
+  test_data<-read.excel(fname) %>% filter(Exp=="LPC wash")
+  fus_num=sum(test_data$Nuclei-1)
+  syn_num=nrow(test_data)
+  nuc_num=fus_num+syn_num
+  mono_num=nuc_num*4
+  myplot<-ggplot(test_data, aes(x=Nuclei))+stat_ecdf(geom='step')
+  # model1<-simulate.random(c(mono_num, rep(0, fus_num)), fus_num)
+  # model1_df<-tibble(n=model1, Nuclei=1:(fus_num+1)) %>% filter(!(Nuclei>1 & n<1))
+  # model1_df$n[1]<-0
+  # model1_df$n<-cumsum(model1_df$n/(sum(model1_df$n)))
+  # myplot<-myplot+geom_step(data=model1_df, aes(x=Nuclei, y=n), col='blue')
+  # model2<-simulate.random(c(nuc_num, rep(0, fus_num)), fus_num)
+  # model2_df<-tibble(n=model2, Nuclei=1:(fus_num+1)) %>% filter(!(Nuclei>1 & n<1))
+  # model2_df$n[1]<-0
+  # model2_df$n<-cumsum(model2_df$n/(sum(model2_df$n)))
+  # myplot<-myplot+geom_step(data=model2_df, aes(x=Nuclei, y=n), col='red')
+  # model3<-simulate.founder(c(syn_num, rep(0, fus_num)), fus_num)
+  # model3_df<-tibble(n=model3, Nuclei=1:(fus_num+1)) %>% filter(!(Nuclei>1 & n<1))
+  # model3_df$n[1]<-0
+  # model3_df$n<-cumsum(model3_df$n/(sum(model3_df$n)))
+  # myplot<-myplot+geom_step(data=model3_df, aes(x=Nuclei, y=n), col='orange')
+  # model4<-simulate.founder(c(syn_num, rep(0, fus_num)), fus_num, weights = 1:(fus_num+1))
+  # model4_df<-tibble(n=model4, Nuclei=1:(fus_num+1)) %>% filter(!(Nuclei>1 & n<1))
+  # model4_df$n[1]<-0
+  # model4_df$n<-cumsum(model4_df$n/(sum(model4_df$n)))
+  # myplot+geom_step(data=model4_df, aes(x=Nuclei, y=n), col='green')
+  # ggsave("Modelcomparison.png", path="./MacrophagePaper/Simulation/", width=6, height=6, dpi=100)
+  
+  timepoints=10
+  model<-bind_rows(lapply(round(seq_len(timepoints)*fus_num/timepoints), function(x)      simulate.random(c(nuc_num, rep(0, x)), x)))
+  # cumsum(model1$n)
+  myplot+geom_line(data=model %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(n)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
+  
+  model<-bind_rows(lapply(round(seq_len(timepoints)*fus_num/timepoints), function(x)      simulate.founder(c(syn_num, rep(0, x)), x, weights = 1:(x+1))))
+  ggsave("RandomModelKinetics.png", path="./MacrophagePaper/Simulation/", width=6, height=6, dpi=100)
+  # cumsum(model1$n)
+  myplot+geom_line(data=model %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(n)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='chartreuse4')+scale_alpha_discrete(range=c(0.2,1), guide=F)
+  ggsave("FounderModelKinetics.png", path="./MacrophagePaper/Simulation/", width=6, height=6, dpi=100)
+  
+  
+  
+```
+
