@@ -12,12 +12,11 @@ Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by press
 When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
 
 ```{r}
-  setwd("..")  
-  source("./Scripts/tools.R")
+  source("../Scripts/tools.R")
   require(ggplot2)
   require(dplyr)
-  fname="./MacrophagePaper/CDF/anti Syn1 on human monocyte.xlsx"
-  test_data<-read.excel(fname) %>% filter(Exp=="LPC wash")
+  fname="../DATA/monocytes/syn1Ab_data.xlsx"
+  test_data<-read.excel(fname) %>% filter(Exp=="LPCwash")
   fus_num=sum(test_data$Nuclei-1)
   syn_num=nrow(test_data)
   nuc_num=fus_num+syn_num
@@ -48,15 +47,209 @@ When you save the notebook, an HTML file containing the code and output will be 
   timepoints=10
   model<-bind_rows(lapply(round(seq_len(timepoints)*fus_num/timepoints), function(x)      simulate.random(c(nuc_num, rep(0, x)), x)))
   # cumsum(model1$n)
-  myplot+geom_line(data=model %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(n)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
+  myplot+geom_line(data=model %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
   
   model<-bind_rows(lapply(round(seq_len(timepoints)*fus_num/timepoints), function(x)      simulate.founder(c(syn_num, rep(0, x)), x, weights = 1:(x+1))))
-  ggsave("RandomModelKinetics.png", path="./MacrophagePaper/Simulation/", width=6, height=6, dpi=100)
+  # ggsave("RandomModelKinetics.png", path="./MacrophagePaper/Simulation/", width=6, height=6, dpi=100)
   # cumsum(model1$n)
-  myplot+geom_line(data=model %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(n)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='chartreuse4')+scale_alpha_discrete(range=c(0.2,1), guide=F)
-  ggsave("FounderModelKinetics.png", path="./MacrophagePaper/Simulation/", width=6, height=6, dpi=100)
+  myplot+geom_line(data=model %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='chartreuse4')+scale_alpha_discrete(range=c(0.2,1), guide=F)
+  # ggsave("FounderModelKinetics.png", path="./MacrophagePaper/Simulation/", width=6, height=6, dpi=100)
   
   
   
+```
+
+Read all Monocyte files and save in a common csv file
+
+```{r}
+  source("./tools.R")
+  require(readr)
+  require(purrr)
+  monocyte_data_fname = "../DATA/monocytes/monocyteData.csv"
+  monocyte_data = NULL
+  xlfiles = Sys.glob(file.path("..", "DATA/monocytes","*.xlsx"))
+  monocyte_data<-map_df(xlfiles, read.excel)
+  write_csv(monocyte_data, monocyte_data_fname)
+  
+
+```
+
+Plot all "LPCwash" CDFs
+
+```{r}
+  require(dplyr)
+  require(ggplot2)
+  ggplot(monocyte_data %>% filter(Exp=="LPCwash"), aes(x=Nuclei, color=fname))+stat_ecdf()+guides(color=FALSE)
+```
+
+Plot all "LPCon" CDFs
+
+```{r}
+  require(dplyr)
+  require(ggplot2)
+  ggplot(monocyte_data %>% filter(Exp=="LPCon" | Exp=="LPCwash"), aes(x=Nuclei, color=fname, linetype=Exp))+stat_ecdf()+guides(color=FALSE)+coord_cartesian(xlim=c(0,50))
+  ggsave("../Simulation/LPCwashOn.png")
+```
+
+
+
+Simulate all LPC wash CDFs with random model
+
+```{r}
+  
+source("./tools.R")
+require(ggplot2)
+require(dplyr)
+for (f in unique((monocyte_data %>% filter(Exp=="LPCwash"))$fname)) {
+  tmpdata<-monocyte_data %>% filter(fname==f) %>% filter(Exp=="LPCwash" | Exp=="LPCon") %>%     select(Nuclei, Exp)
+  lpcwash <- tmpdata %>% filter(Exp=="LPCwash")
+  lpcon <- tmpdata %>% filter(Exp=="LPCon")
+  fus_num = sum(lpcwash$Nuclei-1)- sum(lpcon$Nuclei-1)
+  nuc_num = sum(lpcwash$Nuclei)-sum(lpcon$Nuclei)
+  my_plot<-ggplot(lpcwash, aes(x=Nuclei))+stat_ecdf(color="blue")+ggtitle(paste(f, "fus_num=", fus_num, "nuc_num =", nuc_num)) # +coord_cartesian(xlim=c(0,25))
+  dist0<-initial_dist(lpcon, fus_num,nuc_num)
+  model<-simulate.random(dist0, fus_num, B=100)
+  print(my_plot+geom_step(data=model %>% filter(Nuclei>1) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq),color='red'))
+}
+  
+```
+
+Simulate all LPC wash CDFs with founder model
+
+```{r}
+source("./tools.R")
+require(ggplot2)
+require(dplyr)
+for (f in unique((monocyte_data %>% filter(Exp=="LPCwash"))$fname)) {
+  tmpdata<-monocyte_data %>% filter(fname==f) %>% filter(Exp=="LPCwash" | Exp=="LPCon") %>%     select(Nuclei, Exp)
+  lpcwash <- tmpdata %>% filter(Exp=="LPCwash")
+  lpcon <- tmpdata %>% filter(Exp=="LPCon")
+  fus_num <-sum(lpcwash$Nuclei-1)- sum(lpcon$Nuclei-1)
+  nuc_num <- sum(lpcwash$Nuclei)-sum(lpcon$Nuclei)
+  syn_num <- nuc_num-fus_num
+  my_plot<-ggplot(lpcwash, aes(x=Nuclei))+stat_ecdf(color="blue")+ggtitle(paste(basename(f), "fus_num=", fus_num, "syn_num =", syn_num)) # +coord_cartesian(xlim=c(0,25))
+  dist0<-initial_dist(lpcon, fus_num,syn_num)
+  model<-simulate.founder(dist0, fus_num, weights = 1:length(dist0))
+  print((model[model$Nuclei==1,]$N+syn_num)/syn_num)
+  print(my_plot+geom_step(data=model %>% filter(Nuclei>1) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq),color='red'))
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+Kinetics data first go
+
+```{r}
+
+  source("./tools.R")
+  require(ggplot2)
+  require(dplyr)
+  fname <- "../DATA/monocytes/kinetics_data.xlsx"
+  all_data <-read.excel(fname)
+  min90 <- all_data %>% filter(Exp=="90min")
+  fus_num90=sum(min90$Nuclei-1)
+  syn_num90=nrow(min90)
+  nuc_num90=fus_num90+syn_num90
+  min60 <- all_data %>% filter(Exp=="60min")
+  fus_num60=sum(min60$Nuclei-1)
+  syn_num60=nrow(min60)
+  nuc_num60=fus_num60+syn_num60
+  
+  fnum <- all_data %>% group_by(Exp) %>% summarise(fuse_num = sum(Nuclei-1), syn_num=n())
+  # kinetics_data<-read.excel(fname) %>% filter(Exp=="LPC wash")
+  # fus_num=sum(test_data$Nuclei-1)
+  # syn_num=nrow(test_data)
+  # nuc_num=fus_num+syn_num
+  my_plot<-ggplot(all_data %>% filter(Exp!="LPCon"), aes(x=Nuclei, color=Exp))+stat_ecdf()+coord_cartesian(xlim=c(0,25))
+  
+  dist0<-initial_dist(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num),nuc_num90)
+  model<-bind_rows(lapply(c(fus_num60, fus_num90), function(x) simulate.random(dist0, x)))
+  my_plot+geom_line(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
+  ggsave("../Simulation/random.png")
+  
+  dist0<-initial_dist(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num), (max(fnum$syn_num)-min(fnum$syn_num)))
+  model<-bind_rows(lapply((fnum %>% filter(Exp != "LPCon"))$fuse_num, function(x)      simulate.founder(dist0, x, weights = 1:length(dist0))))
+  my_plot+geom_line(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
+  ggsave("../Simulation/founder0.png")
+  
+  dist0<-initial_dist(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num),1.6*(max(fnum$syn_num)-min(fnum$syn_num)))
+  model<-bind_rows(lapply((fnum %>% filter(Exp != "LPCon"))$fuse_num, function(x)      simulate.founder(dist0, x, weights = 1:length(dist0))))
+  my_plot+geom_line(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
+  ggsave("../Simulation/founder1.png")
+  
+  dist0<-initial_dist(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num),1.6*(max(fnum$syn_num)-min(fnum$syn_num)))
+  dist1<-initial_dist(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num),7500)
+  model<-bind_rows(lapply((fnum %>% filter(Exp != "LPCon"))$fuse_num, function(x)      simulate.founder2(dist0, dist1, x, weights = 1:length(dist0))))
+  my_plot+geom_line(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
+  ggsave("../Simulation/founder2.png")
+  
+  dist0<-initial_dist(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num),nuc_num60)
+  model<-bind_rows(lapply((fnum %>% filter(Exp == "60min"))$fuse_num, function(x)      simulate.random(dist0, x)))
+  my_plot+geom_line(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
+
+```
+
+Some work with different distributions
+
+```{r}
+  test_data<-monocyte_data %>% filter(fname =="../DATA/monocytes/lact_data.xlsx") %>% filter(Exp=="LPCwash")
+  alpha <- length(test_data$Nuclei)/sum(log(test_data$Nuclei/2))
+  p1<-coef(fitdistr(test_data$Nuclei, "exponential"))
+  my_plot<-ggplot(test_data, aes(x=Nuclei))+stat_ecdf(color='red')+stat_function(fun=pexp, args=list(rate=p1))
+  print(my_plot)
+  print(p1)
+  
+ 
+
+```
+
+Plot fusion number
+
+```{r}
+require(boot)  
+
+boot.fnum<-function(data, ind) {
+  if (is.null(ind)) return(sum(data-1))
+  nav <- length(data)
+  n1 <- rpois(1, nav)
+  print(n1)
+  ind<-sample(seq_along(data), n1, replace=TRUE)
+  return(sum(data[ind]-1))
+}
+
+fnum.f<-function(data) {
+  return(sum(data-1))
+}
+
+
+boot_int<-function(data, stat, R, type='perc', conf=0.95) {
+  tmp_boot<-boot(data, stat, R, parallel = 'multicore')
+  df<-tibble(y=0, ymin=0, ymax=0)
+  df$y = stat(data, NULL)
+  df[2:3]<-boot.ci(tmp_boot, conf=conf, type='bca')$bca[1, 4:5]
+  return(df)
+}
+
+test_data1<-monocyte_data %>% dplyr::filter(fname=="../DATA/monocytes/kinetics_data.xlsx")
+
+print(boot_int(test_data1$Nuclei, boot.fnum, 100))
+
+test_data<-monocyte_data %>% dplyr::filter(fname=="../DATA/monocytes/kinetics_data.xlsx") %>% group_by(Exp, field) %>% summarise(fnum = sum(Nuclei-1))
+  ggplot(test_data, aes(x=Exp, y=fnum))+stat_summary_bin(fun.y = "mean", geom = "bar")+stat_summary(fun.data = "mean_cl_normal", geom='pointrange')
+  ggplot(test_data1, aes(x=Exp, y=Nuclei))+stat_summary_bin(fun.y = fnum.f, geom = "bar")+stat_summary(fun.data = boot_int, fun.args=list(stat=boot.fnum, R=100), geom='pointrange')
+  ggsave("../Simulation/fnum.png")
+
+  
+
 ```
 

@@ -19,7 +19,9 @@ read.excel<-function(fname) {
   require(dplyr)
   exp_names=excel_sheets(fname)
   wb<-lapply(exp_names, read_excel, path=fname)
-  bind_rows(mapply(reshape.sheet, wb, exp_names, SIMPLIFY=F))
+  df <- bind_rows(mapply(reshape.sheet, wb, exp_names, SIMPLIFY=F))
+  df$fname = fname
+  return(df)
 }
 
 reshape.sheet <- function(data, exp_name) {
@@ -36,7 +38,7 @@ reshape.sheet <- function(data, exp_name) {
     return(df)
   }
   add.expname <- function(x) add_column(x, Exp=rep(exp_name,nrow(x)))
-  bind_rows(lapply(1:fields_num, select.field)) %>% add.expname 
+  bind_rows(lapply(1:fields_num, select.field)) %>% add.expname
 }
 
 #' Function to model different measures of multinucleation
@@ -93,22 +95,28 @@ fusion.indexes.mod<-function(N, nfus=round(0.3*N), B=1) {
 #'
 #' @examples
 #' 
-simulate.random<-function(dist, fnum, weights=rep(1, length(dist))) {
+simulate.random<-function(dist, fnum, weights=rep(1, length(dist)), B = 1) {
   require(tibble)
   require(dplyr)
-  out_df<-tibble(Nuclei=integer(), n=integer(), fusNum=integer())
+  out_df<-tibble(Nuclei=integer(), N=integer(), fusNum=integer())
   smax<-length(dist)
-  for (i in 1:fnum) {
-    c1<-sample(smax, 1, prob=weights*dist)
-    dist[c1]<-dist[c1]-1
-    c2<-sample(smax, 1, prob=weights*dist)
-    dist[c2]<-dist[c2]-1
-    dist[c1+c2]<-dist[c1+c2]+1
+  init_dist <- dist
+  out_dist <- rep_len(0, length(dist))
+  # print(c(length(dist), length(weights), fnum))
+  for (k in 1:B) { 
+    dist <- init_dist
+    for (i in 1:fnum) {
+      c1<-sample(smax, 1, prob=weights*dist)
+      dist[c1]<-dist[c1]-1
+      c2<-sample(smax, 1, prob=weights*dist)
+      dist[c2]<-dist[c2]-1
+      dist[c1+c2]<-dist[c1+c2]+1
+    }
+    out_dist<-out_dist+dist
   }
-  tmp_df<-tibble(Nuclei=1:(fnum+1), n=dist, fusNum=rep(fnum, fnum+1)) %>% 
-    filter(!(Nuclei>1 & n<1))
-  tmp_df$n[1]<-0
-  out_df<-bind_rows(out_df,tmp_df)
+  out_dist<-out_dist/B
+  out_df<-tibble(Nuclei=1:smax, N=out_dist, fusNum=rep(fnum, smax)) %>% 
+    filter(!(Nuclei>1 & N<1))
   return(out_df)
 }
 
@@ -126,19 +134,51 @@ simulate.random<-function(dist, fnum, weights=rep(1, length(dist))) {
 simulate.founder<-function(dist, fnum, weights=rep(1, length(dist))) {
   require(tibble)
   require(dplyr)
-  out_df<-tibble(Nuclei=integer(), n=integer(), fusNum=integer())
   smax<-length(dist)
+  out_df<-tibble(Nuclei=integer(), N=integer(), fusNum=integer())
   for (i in 1:fnum) {
     c1<-sample(smax, 1, prob=dist*weights)
     dist[c1]<-dist[c1]-1
     dist[c1+1]<-dist[c1+1]+1
   }
-  tmp_df<-tibble(Nuclei=1:(fnum+1), n=dist, fusNum=rep(fnum, fnum+1)) %>% 
-    filter(!(Nuclei>1 & n<1))
-  tmp_df$n[1]<-0
-  out_df<-bind_rows(out_df,tmp_df)
+  out_df<-tibble(Nuclei=1:smax, N=dist, fusNum=rep(fnum, smax)) %>% 
+    filter(!(Nuclei>1 & N<1))
   return(out_df)
 }
+
+simulate.founder2<-function(dist, dist_all, fnum, weights=rep(1, length(dist))) {
+  require(tibble)
+  require(dplyr)
+  smax<-length(dist)
+  out_df<-tibble(Nuclei=integer(), N=integer(), fusNum=integer())
+  for (i in 1:fnum) {
+    c1<-sample(smax, 1, prob=dist*weights)
+    dist[c1]<-dist[c1]-1
+    if (c1>1) dist_all[c1]<-dist_all[c1]-1
+    c2<-sample(smax, 1, prob=dist_all*weights)
+    dist_all[c2]<-dist_all[c2]-1
+    if (c2>1) dist[c2]<-dist[c2]-1
+    dist[c1+c2]<-dist[c1+c2]+1
+    dist_all[c1+c2]<-dist_all[c1+c2]+1
+    
+  }
+  out_df<-tibble(Nuclei=1:smax, N=dist, fusNum=rep(fnum, smax)) %>% 
+    filter(!(Nuclei>1 & N<1))
+  return(out_df)
+}
+
+
+
+initial_dist <- function(data, fnum, mono_num) {
+  counts <- data %>% group_by(Nuclei) %>% summarise(N = n())
+  maxn <- sum(counts$Nuclei*counts$N)+fnum
+  dist <- c(mono_num, rep(0, maxn))
+  for (i in seq_len(nrow(counts))) {
+    dist[counts$Nuclei[i]]<-counts$N[i]
+  }
+  return(dist)
+}
+
 
 dist.to.cdf<-function(dist) {
   cumsum(dist)/sum(dist)

@@ -11,12 +11,13 @@ Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by press
 
 When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
 
+
 Read excel workbooks
 ```{r}
-  source("./Scripts/tools.R")
-  monocyte_data<-read.excel("./OsteoclastMethods/Dynasore_monocytes_data.xlsx")
+  source("../Scripts/tools.R")
+  monocyte_data<-read.excel("../OsteoclastMethods/Dynasore_monocytes_data.xlsx")
   #list.files("./OsteoclastMethods")
-  rawcell_data<-read.excel("./OsteoclastMethods/Dynamin inhibitor on RAW cells.xlsx")
+  rawcell_data<-read.excel("../OsteoclastMethods/Dynamin inhibitor on RAW cells.xlsx")
 ```
 
 Remove Syncytia size with less than threshold number of cases
@@ -31,6 +32,7 @@ Remove Syncytia size with less than threshold number of cases
 Set plotting theme
 
 ```{r}
+require(ggplot2)
 fsize=36
 lsize=3
 myPalette1<-c("firebrick4","chartreuse4", "yellow4","navy","maroon4")
@@ -56,12 +58,25 @@ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
 Plot Area vs Nuclei plot for Monocytes
 
 ```{r}
+  
+  setbreaks<-function(limits) {
+    limits=round(limits)
+    (limits[1]+1):(limits[2]-1)
+  }
+  setlabels<-function(breaks) {
+    sapply(breaks, function(x) if (x%%5==0) return(x) else return(""))
+  }
+  rsq<-round(summary(lm(Area~Nuclei, monocyte_data_lm))$r.squared, 2)
   ggplot(monocyte_data_lm, aes(x=Nuclei, y=Area))+
     mytheme+
     geom_point(size=.2)+
     geom_smooth(method='lm', se=F)+
-    stat_summary(fun.data = "mean_cl_normal", colour = "red", size=.5)
-  ggsave("Fig1rev1.png", path="./OsteoclastMethods/", width=9, height=9, dpi=100)
+    stat_summary(fun.data = "mean_cl_normal", colour = "red", size=.5)+
+    ylab("Area of syncytium, a.u.")+
+    # scale_x_continuous(name="Nuclei/Syncytium", breaks = setbreaks, labels=setlabels)+
+    scale_x_continuous(name="Nuclei/Syncytium", limits=c(.99,NA), breaks=c(1,5,10,15,20))+
+    annotate("text", x = 5, y= 20000, label = paste("r^2==", rsq), size=9, parse=T)
+  ggsave("Fig1final.png", path="../OsteoclastMethods/", width=9, height=9, dpi=100)
   
 ```
 
@@ -93,13 +108,13 @@ Plot eCDF graph for Raw cells data
 
 ```{r}
   
-  ggplot(rawcell_data_plot, aes(x=Nuclei,color=Exp))+mytheme+
+  p1<-ggplot(rawcell_data_plot, aes(x=Nuclei,color=Exp))+mytheme+
     stat_ecdf(geom='step',size=lsize)+
     scale_colour_manual(values=cbPalette, limits=exp_in)+
     ylab("Cumulative frequency")+
     scale_x_continuous(name="Nuclei/Syncytium")+
     coord_cartesian(xlim=c(0,100))
-  ggsave("Fig3brev1.png", path="./OsteoclastMethods/", width=9, height=9, dpi=100)
+  # ggsave("Fig3brev1.png", path="../OsteoclastMethods/", width=9, height=9, dpi=100)
 ```
 
 Plot histogram-like  graph for Raw cells data
@@ -113,14 +128,21 @@ Plot histogram-like  graph for Raw cells data
               bin=c("3-5","6-10","11-49","50-99","100-199","200+")))
   rawcell_data_hist<-bind_rows(rawcell_data_hist,dummy)
   # 
-  ggplot(rawcell_data_hist, aes(fill=Exp,x=bin))+mytheme+
-    geom_bar(aes(y=100*(..count..-1)/(sum(..count..-1))), position="dodge", color='black')+
+  p2<-ggplot(rawcell_data_hist, aes(fill=Exp,x=bin))+mytheme+
+    geom_bar(aes(y=..count..-1), position="dodge", color='black')+
     scale_fill_manual(values=cbPalette, limits=exp_in)+theme(legend.position=c(.7,.7))+
-    ylab("Percent of Total")+xlab("Nuclei/Syncytium")
-  ggsave("Fig3arev1.png", path="./OsteoclastMethods/", width=9, height=9, dpi=100)
+    ylab("Number of cells")+xlab("Nuclei/Syncytium")
+  ## ggsave("Fig3arev1.png", path="../OsteoclastMethods/", width=9, height=9, dpi=100)
   
   
     
+```
+Plot Fig 3 (both panels together)
+
+```{r}
+require(cowplot)
+fig3<-plot_grid(p2, p1, labels = c("A", "B"), align = "h", label_size=48)
+save_plot("Fig3final.png", fig3, , base_height = 9, base_width=9, ncol=2, dpi=100, path="../OsteoclastMethods/")
 ```
 
 
@@ -131,7 +153,6 @@ Plot comparison of different measures of multinucleation
   ggplot(comp_df, aes(x=Step, y=Val, col=Exp))+stat_summary(fun.data = "mean_cl_normal")+geom_abline()
   ggsave("ComparisonFig.png", path="./OsteoclastMethods/", width=9, height=9, dpi=100)
 ```
-
 
 
 
