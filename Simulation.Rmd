@@ -108,7 +108,7 @@ for (f in unique((monocyte_data %>% filter(Exp=="LPCwash"))$fname)) {
   nuc_num = sum(lpcwash$Nuclei)-sum(lpcon$Nuclei)
   my_plot<-ggplot(lpcwash, aes(x=Nuclei))+stat_ecdf(color="blue")+ggtitle(paste(f, "fus_num=", fus_num, "nuc_num =", nuc_num)) # +coord_cartesian(xlim=c(0,25))
   dist0<-initial_dist(lpcon, fus_num,nuc_num)
-  model<-simulate.random(dist0, fus_num, B=100)
+  model<-simulate.random(dist0, fus_num, B=1)
   print(my_plot+geom_step(data=model %>% filter(Nuclei>1) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq),color='red'))
 }
   
@@ -222,7 +222,6 @@ boot.fnum<-function(data, ind) {
   if (is.null(ind)) return(sum(data-1))
   nav <- length(data)
   n1 <- rpois(1, nav)
-  print(n1)
   ind<-sample(seq_along(data), n1, replace=TRUE)
   return(sum(data[ind]-1))
 }
@@ -236,7 +235,7 @@ boot_int<-function(data, stat, R, type='perc', conf=0.95) {
   tmp_boot<-boot(data, stat, R, parallel = 'multicore')
   df<-tibble(y=0, ymin=0, ymax=0)
   df$y = stat(data, NULL)
-  df[2:3]<-boot.ci(tmp_boot, conf=conf, type='bca')$bca[1, 4:5]
+  df[2:3]<-boot.ci(tmp_boot, conf=conf, type='all')$bca[1, 4:5]
   return(df)
 }
 
