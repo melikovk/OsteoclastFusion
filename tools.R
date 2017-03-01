@@ -101,69 +101,44 @@ fusion.indexes.mod<-function(N, nfus=round(0.3*N), B=1) {
 #'
 #' @examples
 #' 
-simulate.random<-function(dist, fnum, weights=rep(1, length(dist)), B = 1) {
+
+simulate.random<-function(dist, fnum, weights=identity, B = 1) {
   out_df<-tibble(Nuclei=integer(), N=integer(), fusNum=integer())
-  smax<-length(dist)
-  init_dist <- dist
-  out_dist <- rep_len(0, length(dist))
-  # print(c(length(dist), length(weights), fnum))
-  for (k in 1:B) { 
-    dist <- init_dist
-    # probs <- weights*dist
-    for (i in 1:fnum) {
-      c1<-sample(smax, 1, prob=weights*dist)
-      dist[c1]<-dist[c1]-1
-      c2<-sample(smax, 1, prob=weights*dist)
-      dist[c2]<-dist[c2]-1
-      dist[c1+c2]<-dist[c1+c2]+1
-    }
-    out_dist<-out_dist+dist
+  if (!is.vector(dist)) {
+    pass
   }
-  out_dist<-out_dist/B
-  out_df<-tibble(Nuclei=1:smax, N=out_dist, fusNum=rep(fnum, smax)) %>% 
-    filter(!(Nuclei>1 & N<1))
-  # print(c(smax, max(out_df$Nuclei)))
+  out_dists <- lapply(1:B, function(x) dist)
+  fnum <- c(0, sort(fnum))
+  fnum_len <- length(fnum)
+  for (tpoint in 2:fnum_len) {
+    for (f in fnum[tpoint-1]:(fnum[tpoint]-1)) {
+      # next fusion
+      for (k in 1:B) {
+        # Advance each replicate 1 step forward
+        max_nuc<-length(out_dists[[k]])
+        c1<-sample(max_nuc, 1, replace = TRUE, prob=weights(out_dists[[k]]))
+        out_dists[[k]][c1]<-out_dists[[k]][c1]-1
+        c2<-sample(max_nuc, 1, replace = TRUE, prob=weights(out_dists[[k]]))
+        out_dists[[k]][c2]<-out_dists[[k]][c2]-1
+        if (c1+c2 > max_nuc) {
+          out_dists[[k]]<-c(out_dists[[k]], rep(0,max_nuc))
+        }
+        out_dists[[k]][c1+c2]<-out_dists[[k]][c1+c2]+1
+      }
+    }
+    # average replicates and record to tibble
+    max_dist<-max(sapply(out_dists, length))
+    out_matrix<-matrix(unlist(lapply(out_dists, function(x) pad_zeros(x,max_dist))), 
+                       nrow=max_dist,ncol=B)
+    out_mean<-.rowMeans(out_matrix, max_dist, B)
+    out_df<-bind_rows(out_df, tibble(Nuclei=1:max_dist, N=out_mean, 
+                                     fusNum=rep(fnum[tpoint], max_dist)) %>% 
+                        filter(!(Nuclei>1 & N<1))) 
+  }
   return(out_df)
 }
 
 simulate.random_c<-compiler::cmpfun(simulate.random)
-
-simulate.random1<-function(dist, fnum, weights=identity, B = 1) {
-  out_df<-tibble(Nuclei=integer(), N=integer(), fusNum=integer())
-  init_dist <- dist
-  out_dist <- rep_len(0, length(dist))
-  # print(c(length(dist), length(weights), fnum))
-  for (k in 1:B) { 
-    dist <- init_dist
-    # probs <- weights*dist
-    for (i in 1:fnum) {
-      smax<-length(dist)
-      c1<-sample(smax, 1, prob=weights(dist))
-      dist[c1]<-dist[c1]-1
-      c2<-sample(smax, 1, prob=weights(dist))
-      dist[c2]<-dist[c2]-1
-      if (c1+c2 > smax) {
-        dist<-c(dist, rep(0,smax))
-      }
-      dist[c1+c2]<-dist[c1+c2]+1
-    }
-    dl <- length(out_dist)-length(dist)
-    if (dl>0) {
-      out_dist<-out_dist+c(dist, rep(0,dl))
-    } else {
-      out_dist<-c(out_dist, rep(0,-dl))+dist
-    }
-  }
-  out_dist<-out_dist/B
-  out_df<-tibble(Nuclei=1:length(out_dist), N=out_dist, fusNum=rep(fnum, length(out_dist))) %>% 
-    filter(!(Nuclei>1 & N<1))
-  # print(c(smax, max(out_df$Nuclei)))
-  return(out_df)
-}
-
-simulate.random1_c<-compiler::cmpfun(simulate.random1)
-
-
 
 #' Function to simulate "founder" fusion model
 #'
@@ -175,7 +150,9 @@ simulate.random1_c<-compiler::cmpfun(simulate.random1)
 #' @export
 #'
 #' @examples
-#' 
+#'
+#'
+
 simulate.founder<-function(dist, fnum, weights=rep(1, length(dist))) {
   require(tibble)
   require(dplyr)
@@ -234,8 +211,9 @@ initial_dist1 <- function(data, fnum, mono_num) {
   return(dist)
 }
 
-
-
+pad_zeros<-function(vec, lmax) {
+  return(c(vec,rep(0, lmax-length(vec))))
+}
 
 dist.to.cdf<-function(dist) {
   cumsum(dist)/sum(dist)

@@ -175,23 +175,23 @@ Kinetics data first go
   dist0<-initial_dist(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num),nuc_num90)
   model<-bind_rows(lapply(c(fus_num60, fus_num90), function(x) simulate.random(dist0, x)))
   my_plot+geom_line(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
-  ggsave("../Simulation/random.png")
+  # ggsave("../Simulation/random.png")
   
   dist0<-initial_dist(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num), (max(fnum$syn_num)-min(fnum$syn_num)))
   model<-bind_rows(lapply((fnum %>% filter(Exp != "LPCon"))$fuse_num, function(x)      simulate.founder(dist0, x, weights = 1:length(dist0))))
   my_plot+geom_line(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
-  ggsave("../Simulation/founder0.png")
+  # ggsave("../Simulation/founder0.png")
   
   dist0<-initial_dist(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num),1.6*(max(fnum$syn_num)-min(fnum$syn_num)))
   model<-bind_rows(lapply((fnum %>% filter(Exp != "LPCon"))$fuse_num, function(x)      simulate.founder(dist0, x, weights = 1:length(dist0))))
   my_plot+geom_line(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
-  ggsave("../Simulation/founder1.png")
+  # ggsave("../Simulation/founder1.png")
   
   dist0<-initial_dist(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num),1.6*(max(fnum$syn_num)-min(fnum$syn_num)))
   dist1<-initial_dist(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num),7500)
   model<-bind_rows(lapply((fnum %>% filter(Exp != "LPCon"))$fuse_num, function(x)      simulate.founder2(dist0, dist1, x, weights = 1:length(dist0))))
   my_plot+geom_line(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
-  ggsave("../Simulation/founder2.png")
+  # ggsave("../Simulation/founder2.png")
   
   dist0<-initial_dist(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num),nuc_num60)
   model<-bind_rows(lapply((fnum %>% filter(Exp == "60min"))$fuse_num, function(x)      simulate.random(dist0, x)))
@@ -251,4 +251,3 @@ test_data<-monocyte_data %>% dplyr::filter(fname=="../DATA/monocytes/kinetics_da
   
 
 ```
-
