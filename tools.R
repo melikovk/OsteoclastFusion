@@ -17,8 +17,16 @@
 
 require(tibble)
 require(dplyr)
-require(wrswoR)
+# require(wrswoR)
+require(parallel)
+require(doParallel)
+require(foreach)
+require(iterators)
+no_of_cores = detectCores()
 
+pad_zeros<-function(vec, lmax) {
+  return(c(vec,rep(0, lmax-length(vec))))
+}
 
 read.excel<-function(fname) {
   require(readxl)
@@ -138,6 +146,52 @@ simulate.random<-function(dist, fnum, weights=identity, B = 1) {
   return(out_df)
 }
 
+psimulate.random<-function(dist, fnum, weights=identity, B = 1) {
+  cl = makeCluster(no_of_cores, type = "SOCK")
+  registerDoParallel(cl)
+  on.exit(stopCluster(cl))
+  out_df<-tibble(Nuclei=integer(), N=integer(), fusNum=integer())
+  if (!is.vector(dist)) {
+    pass
+  }
+  out_dists <- lapply(1:B, function(x) dist)
+  fnum <- c(0, sort(fnum))
+  fnum_len <- length(fnum)
+  for (tpoint in 2:fnum_len) {
+    # for (k in 1:B) 
+    out_dists<-foreach(next_dist=iter(out_dists)) %dopar% {
+      # next simulation
+      for (f in fnum[tpoint-1]:(fnum[tpoint]-1)) {
+        # next fusion
+        max_nuc<-length(next_dist)
+        c1<-sample(max_nuc, 1, replace = TRUE, prob=weights(next_dist))
+        next_dist[c1]<-next_dist[c1]-1
+        c2<-sample(max_nuc, 1, replace = TRUE, prob=weights(next_dist))
+        next_dist[c2]<-next_dist[c2]-1
+        if (c1+c2 > max_nuc) {
+          next_dist<-c(next_dist, rep(0,max_nuc))
+        }
+        next_dist[c1+c2]<-next_dist[c1+c2]+1
+      }
+      next_dist
+    }
+    # average replicates and record to tibble
+    max_dist<-max(foreach(dist=out_dists, .combine=c, .multicombine = T) %do% length(dist))
+    out_mean<-(foreach(dist=out_dists, .combine='+', .export=c("pad_zeros")) 
+               %dopar% pad_zeros(dist,max_dist))/B
+    # out_matrix<-matrix(foreach(dist=out_dists, .combine=c, .multicombine=T) %do% 
+    #                     pad_zeros(dist,max_dist), nrow=max_dist,ncol=B)
+    # out_matrix<-matrix(unlist(lapply(out_dists, function(x) pad_zeros(x,max_dist))), 
+    #                   nrow=max_dist,ncol=B)
+    # out_mean<-.rowMeans(out_matrix, max_dist, B)
+    out_df<-bind_rows(out_df, tibble(Nuclei=1:max_dist, N=out_mean, 
+                                     fusNum=rep(fnum[tpoint], max_dist)) %>% 
+                        filter(!(Nuclei>1 & N<1))) 
+  }
+  return(out_df)
+}
+
+psimulate.random_c<-compiler::cmpfun(psimulate.random)
 simulate.random_c<-compiler::cmpfun(simulate.random)
 
 #' Function to simulate "founder" fusion model
@@ -233,9 +287,6 @@ initial_dist1 <- function(data, fnum, mono_num) {
   return(dist)
 }
 
-pad_zeros<-function(vec, lmax) {
-  return(c(vec,rep(0, lmax-length(vec))))
-}
 
 dist.to.cdf<-function(dist) {
   cumsum(dist)/sum(dist)
