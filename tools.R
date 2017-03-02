@@ -147,9 +147,9 @@ simulate.random<-function(dist, fnum, weights=identity, B = 1) {
 }
 
 psimulate.random<-function(dist, fnum, weights=identity, B = 1) {
-  cl = makeCluster(no_of_cores, type = "SOCK")
-  registerDoParallel(cl)
-  on.exit(stopCluster(cl))
+  # cl = makeCluster(no_of_cores, type = "SOCK")
+  registerDoParallel(no_of_cores)
+  # on.exit(stopCluster(cl))
   out_df<-tibble(Nuclei=integer(), N=integer(), fusNum=integer())
   if (!is.vector(dist)) {
     pass
@@ -176,14 +176,14 @@ psimulate.random<-function(dist, fnum, weights=identity, B = 1) {
       next_dist
     }
     # average replicates and record to tibble
-    max_dist<-max(foreach(dist=out_dists, .combine=c, .multicombine = T) %do% length(dist))
-    out_mean<-(foreach(dist=out_dists, .combine='+', .export=c("pad_zeros")) 
-               %dopar% pad_zeros(dist,max_dist))/B
-    # out_matrix<-matrix(foreach(dist=out_dists, .combine=c, .multicombine=T) %do% 
-    #                     pad_zeros(dist,max_dist), nrow=max_dist,ncol=B)
+    max_dist<-max(foreach(dist=out_dists, .combine=c, .multicombine = T) %dopar% length(dist))
+    #out_mean<-(foreach(dist=out_dists, .combine='+', .export=c("pad_zeros")) 
+    #         %dopar% pad_zeros(dist,max_dist))/B
+    out_matrix<-matrix(foreach(dist=out_dists, .combine=c, .multicombine=T, .export=c("pad_zeros")) %dopar% 
+     pad_zeros(dist,max_dist),max_dist, B)
     # out_matrix<-matrix(unlist(lapply(out_dists, function(x) pad_zeros(x,max_dist))), 
     #                   nrow=max_dist,ncol=B)
-    # out_mean<-.rowMeans(out_matrix, max_dist, B)
+    out_mean<-.rowMeans(out_matrix, max_dist, B)
     out_df<-bind_rows(out_df, tibble(Nuclei=1:max_dist, N=out_mean, 
                                      fusNum=rep(fnum[tpoint], max_dist)) %>% 
                         filter(!(Nuclei>1 & N<1))) 
