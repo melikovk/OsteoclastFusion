@@ -329,15 +329,18 @@ simulate.founder2<-function(dist, mono_num, fnum, weights=identity, weights_all=
   return(out_df)
 }
 
-psimulate.founder2<-function(dist, mono_num, fnum, weights=identity, weights_all=identity, B=1) {
+psimulate.founder2<-function(dist, mono_num, fnum, weights=identity, weights_all=identity, B=1, ret.matrix=FALSE) {
   registerDoParallel(no_of_cores)
-  out_df<-tibble(Nuclei=integer(), N=integer(), fusNum=integer())
+  #out_df<-tibble(Nuclei=integer(), N=integer(), fusNum=integer())
   if (!is.vector(dist)) {
     
   }
-  out_dists <- lapply(1:B, function(x) c(mono_num, dist))
+  max_nuc <- length(dist)
+  out_dists <- lapply(1:B, function(x) c(mono_num, dist, rep.int(0, max_nuc)))
   fnum <- c(0, sort(fnum))
   fnum_len <- length(fnum)
+  out_list<- vector('list', fnum_len-1)
+  names(out_list)<-as.character(fnum[-1])
   for (tpoint in 2:fnum_len) {
     out_dists<-foreach(next_dist=iter(out_dists)) %dopar% {
       # next fusion
@@ -366,10 +369,20 @@ psimulate.founder2<-function(dist, mono_num, fnum, weights=identity, weights_all
     out_matrix<-matrix(unlist(lapply(out_dists, function(x) pad_zeros(x[-1],max_dist))), 
                        nrow=max_dist,ncol=B)
     out_mean<-.rowMeans(out_matrix, max_dist, B)
-    out_df<-bind_rows(out_df, tibble(Nuclei=1:max_dist, N=out_mean, 
-                                     fusNum=rep(fnum[tpoint], max_dist)) %>% filter(!(Nuclei>1 & N<1))) 
+    out_mean<-out_mean/sum(out_mean)
+    out_list[[as.character(fnum[tpoint])]]<-out_mean
   }
-  return(out_df)
+  if (ret.matrix) {
+    max_dist<-max(sapply(out_list, length))
+    out_data <- matrix(unlist(lapply(out_list, function(x) pad_zeros(x,max_dist))), 
+                       nrow=max_dist,ncol=fnum_len-1) 
+  } else {
+    out_data<-foreach(odist=iter(out_list), fus_num=fnum[-1], .combine = bind_rows, .multicombine = TRUE) %do% {
+      tibble(Nuclei=seq_along(odist), N=odist, fusNum=rep.int(fus_num, length(odist))) %>% 
+        filter(N>0 | Nuclei==1)
+    }
+  }
+  return(out_data)
 }
 
 simulate.founder2_c<-compiler::cmpfun(simulate.founder2)
@@ -387,7 +400,7 @@ fit.founder2<-function(data, mono, control.name) {
 
 initial_dist <- function(data, mono_num) {
   counts <- data %>% group_by(Nuclei) %>% summarise(N = n())
-  maxn <- max(counts$Nuclei)*2
+  maxn <- max(counts$Nuclei)
   dist <- c(mono_num, rep(0, maxn))
   for (i in seq_len(nrow(counts))) {
     dist[counts$Nuclei[i]]<-counts$N[i]
