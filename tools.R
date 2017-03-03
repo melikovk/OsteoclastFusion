@@ -113,7 +113,7 @@ fusion.indexes.mod<-function(N, nfus=round(0.3*N), B=1) {
 simulate.random<-function(dist, fnum, weights=identity, B = 1) {
   out_df<-tibble(Nuclei=integer(), N=integer(), fusNum=integer())
   if (!is.vector(dist)) {
-    pass
+    
   }
   out_dists <- lapply(1:B, function(x) dist)
   fnum <- c(0, sort(fnum))
@@ -152,7 +152,7 @@ psimulate.random<-function(dist, fnum, weights=identity, B = 1) {
   # on.exit(stopCluster(cl))
   out_df<-tibble(Nuclei=integer(), N=integer(), fusNum=integer())
   if (!is.vector(dist)) {
-    pass
+    
   }
   out_dists <- lapply(1:B, function(x) dist)
   fnum <- c(0, sort(fnum))
@@ -210,7 +210,7 @@ simulate.random_c<-compiler::cmpfun(simulate.random)
 simulate.founder<-function(dist, fnum, weights=identity, B=1) {
   out_df<-tibble(Nuclei=integer(), N=integer(), fusNum=integer())
   if (!is.vector(dist)) {
-    pass
+    
   }
   out_dists <- lapply(1:B, function(x) dist)
   fnum <- c(0, sort(fnum))
@@ -247,7 +247,7 @@ psimulate.founder<-function(dist, fnum, weights=identity, B = 1) {
   # on.exit(stopCluster(cl))
   out_df<-tibble(Nuclei=integer(), N=integer(), fusNum=integer())
   if (!is.vector(dist)) {
-    pass
+    
   }
   out_dists <- lapply(1:B, function(x) dist)
   fnum <- c(0, sort(fnum))
@@ -269,7 +269,7 @@ psimulate.founder<-function(dist, fnum, weights=identity, B = 1) {
       next_dist
     }
     # average replicates and record to tibble
-    max_dist<-max(foreach(dist=out_dists, .combine=c, .multicombine = T) %dopar% length(dist))
+    max_dist<-max(foreach(dist=out_dists, .combine=c, .multicombine = T) %do% length(dist))
     #out_mean<-(foreach(dist=out_dists, .combine='+', .export=c("pad_zeros")) 
     #         %dopar% pad_zeros(dist,max_dist))/B
     out_matrix<-matrix(foreach(dist=out_dists, .combine=c, .multicombine=T, .export=c("pad_zeros")) %dopar% 
@@ -287,26 +287,95 @@ psimulate.founder<-function(dist, fnum, weights=identity, B = 1) {
 simulate.founder_c<-compiler::cmpfun(simulate.founder)
 
 
-simulate.founder2<-function(dist, dist_all, fnum, weights=rep(1, length(dist))) {
-  require(tibble)
-  require(dplyr)
-  smax<-length(dist)
+simulate.founder2<-function(dist, mono_num, fnum, weights=identity, weights_all=identity, B=1) {
   out_df<-tibble(Nuclei=integer(), N=integer(), fusNum=integer())
-  for (i in 1:fnum) {
-    c1<-sample(smax, 1, prob=dist*weights)
-    dist[c1]<-dist[c1]-1
-    if (c1>1) dist_all[c1]<-dist_all[c1]-1
-    c2<-sample(smax, 1, prob=dist_all*weights)
-    dist_all[c2]<-dist_all[c2]-1
-    if (c2>1) dist[c2]<-dist[c2]-1
-    dist[c1+c2]<-dist[c1+c2]+1
-    dist_all[c1+c2]<-dist_all[c1+c2]+1
+  if (!is.vector(dist)) {
     
   }
-  out_df<-tibble(Nuclei=1:smax, N=dist, fusNum=rep(fnum, smax)) %>% 
-    filter(!(Nuclei>1 & N<1))
+  out_dists <- lapply(1:B, function(x) c(mono_num, dist))
+  fnum <- c(0, sort(fnum))
+  fnum_len <- length(fnum)
+  for (tpoint in 2:fnum_len) {
+    for (f in fnum[tpoint-1]:(fnum[tpoint]-1)) {
+      # next fusion
+      for (k in 1:B) {
+        # Advance each replicate 1 step forward
+        max_nuc<-length(out_dists[[k]])-1
+        # choose first cell
+        c1<-sample(max_nuc, 1, replace = TRUE, prob=weights(out_dists[[k]][-1]))
+        out_dists[[k]][c1+1]<-out_dists[[k]][c1+1]-1
+        # choose 2nd cell
+        c2<-sample(max_nuc, 1, replace = TRUE, prob=weights_all(out_dists[[k]][-2]))
+        if (c2>1) 
+          out_dists[[k]][c2+1]<-out_dists[[k]][c2+1]-1
+        else
+          out_dists[[k]][c2]<-out_dists[[k]][c2]-1
+        # add fusion product
+        if (c1+c2 > max_nuc) {
+          out_dists[[k]]<-c(out_dists[[k]], rep(0,max_nuc))
+        }
+        out_dists[[k]][c1+c2+1]<-out_dists[[k]][c1+c2+1]+1
+      }
+    }
+    # average replicates and record to tibble
+    max_dist<-max(sapply(out_dists, length))-1
+    out_matrix<-matrix(unlist(lapply(out_dists, function(x) pad_zeros(x[-1],max_dist))), 
+                       nrow=max_dist,ncol=B)
+    out_mean<-.rowMeans(out_matrix, max_dist, B)
+    out_df<-bind_rows(out_df, tibble(Nuclei=1:max_dist, N=out_mean, 
+                                     fusNum=rep(fnum[tpoint], max_dist)) %>% 
+                        filter(!(Nuclei>1 & N<1))) 
+  }
   return(out_df)
 }
+
+psimulate.founder2<-function(dist, mono_num, fnum, weights=identity, weights_all=identity, B=1) {
+  registerDoParallel(no_of_cores)
+  out_df<-tibble(Nuclei=integer(), N=integer(), fusNum=integer())
+  if (!is.vector(dist)) {
+    
+  }
+  out_dists <- lapply(1:B, function(x) c(mono_num, dist))
+  fnum <- c(0, sort(fnum))
+  fnum_len <- length(fnum)
+  for (tpoint in 2:fnum_len) {
+    out_dists<-foreach(next_dist=iter(out_dists)) %dopar% {
+      # next fusion
+      for (f in fnum[tpoint-1]:(fnum[tpoint]-1)) {
+        # Advance each replicate 1 step forward
+        max_nuc<-length(next_dist)-1
+        # choose first cell
+        c1<-sample(max_nuc, 1, replace = TRUE, prob=weights(next_dist[-1]))
+        next_dist[c1+1]<-next_dist[c1+1]-1
+        # choose 2nd cell
+        c2<-sample(max_nuc, 1, replace = TRUE, prob=weights_all(next_dist[-2]))
+        if (c2 > 1) 
+          next_dist[c2+1]<-next_dist[c2+1]-1
+        else 
+          next_dist[c2]<-next_dist[c2]-1
+        # add fusion product
+        if (c1+c2 > max_nuc) {
+          next_dist<-c(next_dist, rep(0,max_nuc))
+        }
+        next_dist[c1+c2+1]<-next_dist[c1+c2+1]+1
+      }
+      next_dist
+    }
+    # average replicates and record to tibble
+    max_dist<-max(sapply(out_dists, length))-1
+    out_matrix<-matrix(unlist(lapply(out_dists, function(x) pad_zeros(x[-1],max_dist))), 
+                       nrow=max_dist,ncol=B)
+    out_mean<-.rowMeans(out_matrix, max_dist, B)
+    out_df<-bind_rows(out_df, tibble(Nuclei=1:max_dist, N=out_mean, 
+                                     fusNum=rep(fnum[tpoint], max_dist)) %>% filter(!(Nuclei>1 & N<1))) 
+  }
+  return(out_df)
+}
+
+simulate.founder2_c<-compiler::cmpfun(simulate.founder2)
+psimulate.founder2_c<-compiler::cmpfun(psimulate.founder2)
+
+# fit.founder1()
 
 initial_dist <- function(data, mono_num) {
   counts <- data %>% group_by(Nuclei) %>% summarise(N = n())
