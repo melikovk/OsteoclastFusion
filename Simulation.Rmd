@@ -172,24 +172,24 @@ Kinetics data first go
   # nuc_num=fus_num+syn_num
   my_plot<-ggplot(all_data %>% filter(Exp!="LPCon"), aes(x=Nuclei, color=Exp))+stat_ecdf()+coord_cartesian(xlim=c(0,50))
   
-  dist0<-initial_dist1(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num),nuc_num90)
-  model<-simulate.random(dist0, c(fus_num60,fus_num90))
+  dist0<-initial_dist(all_data %>% filter(Exp=="30min"), nuc_num90)
+  model<-psimulate.random(dist0, c(fus_num60,fus_num90), B=100)
   my_plot+geom_line(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
   # ggsave("../Simulation/random.png")
   
-  dist0<-initial_dist1(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num), (max(fnum$syn_num)-min(fnum$syn_num)))
-  model<-simulate.founder(dist0, fnum$fuse_num, weights = 1:length(dist0))
+  dist0<-initial_dist(all_data %>% filter(Exp=="30min"), (max(fnum$syn_num)-min(fnum$syn_num)))
+  model<-psimulate.founder(dist0, fnum$fuse_num, weights = function(x) x*(1:length(x)), B=100)
   my_plot+geom_line(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
   # ggsave("../Simulation/founder0.png")
   
-  dist0<-initial_dist1(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num),1.5*(max(fnum$syn_num)-min(fnum$syn_num)))
-  model<-simulate.founder(dist0, fnum$fuse_num, weights = function(x) return(x*(1:length(x))), B=100)
-  my_plot+geom_step(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
+  dist0<-initial_dist(all_data %>% filter(Exp=="30min"), 1.5*(max(fnum$syn_num)-min(fnum$syn_num)))
+  model<-simulate.founder(dist0, fnum$fuse_num, weights = function(x) x*(1:length(x)), B=100)
+  my_plot+geom_line(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
   # ggsave("../Simulation/founder1.png")
   
-  dist0<-initial_dist(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num),1.6*(max(fnum$syn_num)-min(fnum$syn_num)))
-  dist1<-initial_dist(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num),7500)
-  model<-bind_rows(lapply((fnum %>% filter(Exp != "LPCon"))$fuse_num, function(x)      simulate.founder2(dist0, dist1, x, weights = 1:length(dist0))))
+  dist0<-initial_dist(all_data %>% filter(Exp=="30min"), 1.8*(max(fnum$syn_num)-min(fnum$syn_num)))
+  # dist1<-initial_dist(all_data %>% filter(Exp=="30min"), 7500)
+  model<-psimulate.founder2(dist0, 7500, fnum$fuse_num, weights = function(x) x*(1:length(x)), B=100)
   my_plot+geom_line(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
   # ggsave("../Simulation/founder2.png")
   

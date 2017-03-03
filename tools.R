@@ -375,7 +375,15 @@ psimulate.founder2<-function(dist, mono_num, fnum, weights=identity, weights_all
 simulate.founder2_c<-compiler::cmpfun(simulate.founder2)
 psimulate.founder2_c<-compiler::cmpfun(psimulate.founder2)
 
-# fit.founder1()
+fit.founder2<-function(data, mono, control.name) {
+  control<- data %>% filter(Exp==control.name) %>% summarise(fuse.num = sum(Nuclei-1), syn.num=n())
+  fnums <- data %>% filter(Exp!=control.name) %>% group_by(Exp) %>% summarise(fuse.num = sum(Nuclei-1), syn.num=n())
+  fnums$fuse.num<-fnums$fuse.num-control$fuse.num
+  fnums$syn.num<-fnums$syn.num-control$syn.num
+  for (fit.num in max(fnums$syn.num):mono) {
+    
+  }
+}
 
 initial_dist <- function(data, mono_num) {
   counts <- data %>% group_by(Nuclei) %>% summarise(N = n())
@@ -383,6 +391,15 @@ initial_dist <- function(data, mono_num) {
   dist <- c(mono_num, rep(0, maxn))
   for (i in seq_len(nrow(counts))) {
     dist[counts$Nuclei[i]]<-counts$N[i]
+  }
+  return(dist)
+}
+
+dist.to.vec<-function(data) {
+  maxn <- max(data$Nuclei)
+  dist <- rep(0, maxn)
+  for (i in seq_along(data$Nuclei)) {
+    dist[data$Nuclei[i]]<-data$N[i]
   }
   return(dist)
 }
