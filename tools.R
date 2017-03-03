@@ -241,6 +241,49 @@ simulate.founder<-function(dist, fnum, weights=identity, B=1) {
   return(out_df)
 }
 
+psimulate.founder<-function(dist, fnum, weights=identity, B = 1) {
+  # cl = makeCluster(no_of_cores, type = "SOCK")
+  registerDoParallel(no_of_cores)
+  # on.exit(stopCluster(cl))
+  out_df<-tibble(Nuclei=integer(), N=integer(), fusNum=integer())
+  if (!is.vector(dist)) {
+    pass
+  }
+  out_dists <- lapply(1:B, function(x) dist)
+  fnum <- c(0, sort(fnum))
+  fnum_len <- length(fnum)
+  for (tpoint in 2:fnum_len) {
+    # for (k in 1:B) 
+    out_dists<-foreach(next_dist=iter(out_dists)) %dopar% {
+      # next simulation
+      for (f in fnum[tpoint-1]:(fnum[tpoint]-1)) {
+        # next fusion
+        max_nuc<-length(next_dist)
+        c1<-sample(max_nuc, 1, replace = TRUE, prob=weights(next_dist))
+        next_dist[c1]<-next_dist[c1]-1
+        if (c1+1 > max_nuc) {
+          next_dist<-c(next_dist, rep(0,max_nuc))
+        }
+        next_dist[c1+1]<-next_dist[c1+1]+1
+      }
+      next_dist
+    }
+    # average replicates and record to tibble
+    max_dist<-max(foreach(dist=out_dists, .combine=c, .multicombine = T) %dopar% length(dist))
+    #out_mean<-(foreach(dist=out_dists, .combine='+', .export=c("pad_zeros")) 
+    #         %dopar% pad_zeros(dist,max_dist))/B
+    out_matrix<-matrix(foreach(dist=out_dists, .combine=c, .multicombine=T, .export=c("pad_zeros")) %dopar% 
+                         pad_zeros(dist,max_dist),max_dist, B)
+    # out_matrix<-matrix(unlist(lapply(out_dists, function(x) pad_zeros(x,max_dist))), 
+    #                   nrow=max_dist,ncol=B)
+    out_mean<-.rowMeans(out_matrix, max_dist, B)
+    out_df<-bind_rows(out_df, tibble(Nuclei=1:max_dist, N=out_mean, 
+                                     fusNum=rep(fnum[tpoint], max_dist)) %>% 
+                        filter(!(Nuclei>1 & N<1))) 
+  }
+  return(out_df)
+}
+
 simulate.founder_c<-compiler::cmpfun(simulate.founder)
 
 
@@ -265,19 +308,7 @@ simulate.founder2<-function(dist, dist_all, fnum, weights=rep(1, length(dist))) 
   return(out_df)
 }
 
-
-
-initial_dist <- function(data, fnum, mono_num) {
-  counts <- data %>% group_by(Nuclei) %>% summarise(N = n())
-  maxn <- sum(counts$Nuclei*counts$N)+fnum
-  dist <- c(mono_num, rep(0, maxn))
-  for (i in seq_len(nrow(counts))) {
-    dist[counts$Nuclei[i]]<-counts$N[i]
-  }
-  return(dist)
-}
-
-initial_dist1 <- function(data, fnum, mono_num) {
+initial_dist <- function(data, mono_num) {
   counts <- data %>% group_by(Nuclei) %>% summarise(N = n())
   maxn <- max(counts$Nuclei)*2
   dist <- c(mono_num, rep(0, maxn))
