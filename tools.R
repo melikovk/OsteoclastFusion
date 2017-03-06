@@ -369,8 +369,9 @@ psimulate.founder2<-function(dist, mono_num, fnum, weights=identity, weights_all
     out_matrix<-matrix(unlist(lapply(out_dists, function(x) pad_zeros(x[-1],max_dist))), 
                        nrow=max_dist,ncol=B)
     out_mean<-.rowMeans(out_matrix, max_dist, B)
-    out_mean<-out_mean/sum(out_mean)
-    out_list[[as.character(fnum[tpoint])]]<-out_mean
+    max_syn <- Position(function(x) x>0, out_mean, right=TRUE)
+    # out_mean<-out_mean/sum(out_mean)
+    out_list[[as.character(fnum[tpoint])]]<-out_mean[1:max_syn]
   }
   if (ret.matrix) {
     max_dist<-max(sapply(out_list, length))
@@ -388,20 +389,47 @@ psimulate.founder2<-function(dist, mono_num, fnum, weights=identity, weights_all
 simulate.founder2_c<-compiler::cmpfun(simulate.founder2)
 psimulate.founder2_c<-compiler::cmpfun(psimulate.founder2)
 
-fit.founder2<-function(data, mono, control.name) {
+fit.founder2<-function(data, mono, control.name, max.step=100) {
   control<- data %>% filter(Exp==control.name) %>% summarise(fuse.num = sum(Nuclei-1), syn.num=n())
   fnums <- data %>% filter(Exp!=control.name) %>% group_by(Exp) %>% summarise(fuse.num = sum(Nuclei-1), syn.num=n())
   fnums$fuse.num<-fnums$fuse.num-control$fuse.num
   fnums$syn.num<-fnums$syn.num-control$syn.num
-  for (fit.num in max(fnums$syn.num):mono) {
-    
+  # create data matrix
+  exp_matrix<-foreach(name=fnums$Exp[order(fnums$fuse.num)]) %do% {
+    initial_dist(data %>% filter(Exp==name),0)[-1]
+  }
+  max_dist<-max(sapply(exp_matrix, length))
+  exp_matrix <- matrix(unlist(lapply(exp_matrix, function(x) pad_zeros(x,max_dist))), 
+                     nrow=max_dist,ncol=nrow(fnums))
+  # create initial dist
+  dist0<-initial_dist(data %>% filter(Exp==control.name),0)
+  minErr <- Inf
+  bestPar <- 0
+  for (fit.num in seq(from=max(fnums$syn.num), length.out = max.step)) {
+      dist0[1]<-fit.num
+      # cat(fit.num, "\n")
+      model <- psimulate.founder2(dist0, mono, fnums$fuse.num, 
+                                  weights = function(x) x*(1:length(x)), B=100, ret.matrix=T)
+      if (nrow(model)-1 < max_dist) {
+        model<-apply(model, 2, function(x) pad_zeros(x, max_dist+1))
+      } 
+      model<-model[2:(max_dist+1),]  
+      error<-sum((model-exp_matrix)^2)
+      if (error<minErr) {
+        minErr <-error
+        bestPar <- fit.num
+        cat("Current best fit is ", bestPar, " with error of ", minErr, "\n")
+      }
+      if (fit.num %% 500 == 0) {
+        cat(fit.num, " Current best fit is ", bestPar, " with error of ", minErr, "\n")
+      }
   }
 }
 
 initial_dist <- function(data, mono_num) {
   counts <- data %>% group_by(Nuclei) %>% summarise(N = n())
   maxn <- max(counts$Nuclei)
-  dist <- c(mono_num, rep(0, maxn))
+  dist <- c(round(mono_num), rep(0, maxn-1))
   for (i in seq_len(nrow(counts))) {
     dist[counts$Nuclei[i]]<-counts$N[i]
   }
@@ -417,9 +445,19 @@ dist.to.vec<-function(data) {
   return(dist)
 }
 
+subtruct.dist<-function(data, dist) {
+  for (i in seq_along(dist)) {
+    data$N[data$Nuclei==i]<-data$N[data$Nuclei==i]-dist[i]
+  }
+  data$N[data$N<0]<-0
+  return(data)
+}
 
-dist.to.cdf<-function(dist) {
-  cumsum(dist)/sum(dist)
+
+dist.to.cdf<-function(dist, norm=TRUE) {
+  ret <- cumsum(dist)
+  if (norm) ret<-ret/sum(dist)
+  return(ret)
 }
 
 

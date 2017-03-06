@@ -187,17 +187,54 @@ Kinetics data first go
   my_plot+geom_line(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
   # ggsave("../Simulation/founder1.png")
   
-  dist0<-initial_dist(all_data %>% filter(Exp=="30min"), 1.8*(max(fnum$syn_num)-min(fnum$syn_num)))
+  # dist0<-initial_dist(all_data %>% filter(Exp=="30min"), 2.2*(max(fnum$syn_num)-min(fnum$syn_num)))
+  dist0<-initial_dist(all_data %>% filter(Exp=="30min"), 266)
   # dist1<-initial_dist(all_data %>% filter(Exp=="30min"), 7500)
   model<-psimulate.founder2(dist0, 7500, fnum$fuse_num, weights = function(x) x*(1:length(x)), B=100)
-  my_plot+geom_line(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
+  my_plot+geom_step(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
   # ggsave("../Simulation/founder2.png")
   
   dist0<-initial_dist(all_data %>% filter(Exp=="30min"), max(fnum$fuse_num)-min(fnum$fuse_num),nuc_num60)
   model<-bind_rows(lapply((fnum %>% filter(Exp == "60min"))$fuse_num, function(x)      simulate.random(dist0, x)))
   my_plot+geom_point(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
-
+  
 ```
+
+Take into account numbers of events (do not normaize bins)
+
+```{r}
+  source("./tools.R")
+  require(ggplot2)
+  require(dplyr)
+  fname <- "../DATA/monocytes/kinetics_data.xlsx"
+  all_data <-read.excel(fname)
+  fnums <- all_data %>% filter(Exp!="LPCon") %>% group_by(Exp) %>% 
+    summarise(fuse_num = sum(Nuclei-1), syn_num=n())
+  exp_dists <- all_data %>% group_by(Exp, Nuclei) %>% summarise(N=n())
+  # my_plot
+  dist0<-initial_dist(all_data %>% filter(Exp=="30min"), 260)
+  exp_dists1<-exp_dists %>% group_by(Exp) %>% do(subtruct.dist(., dist0))
+  
+  # dist1<-initial_dist(all_data %>% filter(Exp=="30min"), 7500)
+  fnums$fuse_num<-fnums$fuse_num-fnums$fuse_num[fnums$Exp=='30min']
+  # dist0<-c(550, rep(0,20))
+  model<-psimulate.founder2(dist0, 8000, fnums$fuse_num, 
+                            weights = function(x) x*(1:length(x)), B=1)
+  model <- model %>% mutate(Exp=fusNum)
+  model$Exp <- vapply(model$Exp, function(x) fnums$Exp[fnums$fuse_num==x], "")
+  my_plot<-ggplot(exp_dists1 %>% filter(Exp!="LPCon") %>% mutate(freq=dist.to.cdf(N, FALSE)), 
+                  aes(x=Nuclei, y=freq, color=Exp))+geom_step()+facet_wrap(~Exp, scales = "free")
+  my_plot+geom_step(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N, FALSE)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
+  my_plot1<-ggplot(exp_dists %>% filter(Exp!="LPCon") %>% mutate(freq=dist.to.cdf(N)), 
+                  aes(x=Nuclei, y=freq, color=Exp))+geom_step()+facet_wrap(~Exp, scales = "free")
+  my_plot1+geom_step(data=model %>% filter(Nuclei>1) %>% group_by(fusNum) %>% mutate(freq=dist.to.cdf(N)), aes(x=Nuclei, y=freq, alpha=factor(fusNum)),col='red')+scale_alpha_discrete(range=c(0.2,1), guide=F)
+  
+```
+
+
+
+
+
 
 Some work with different distributions
 
